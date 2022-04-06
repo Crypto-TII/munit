@@ -320,6 +320,14 @@ static const MunitSuite test_suite = {
   (char*) "",
   /* The first parameter is the array of test suites. */
   test_suite_tests,
+  /* Following the array of tests, an optional setup function that is
+   * executed only once before any test in the suite.
+   */
+  NULL,
+  /* An optional teardown function that is executed only once before
+   * any test in the suite.
+   */
+  NULL,
   /* In addition to containing test cases, suites can contain other
    * test suites.  This isn't necessary in this example, but it can be
    * a great help to projects with lots of tests by making it easier

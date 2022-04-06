@@ -436,6 +436,8 @@ typedef enum {
 typedef MunitResult (* MunitTestFunc)(const MunitParameter params[], void* user_data_or_fixture);
 typedef void*       (* MunitTestSetup)(const MunitParameter params[], void* user_data);
 typedef void        (* MunitTestTearDown)(void* fixture);
+typedef void*       (* MunitSuiteSetup)(void* user_data);
+typedef void        (* MunitSuiteTearDown)(void* fixture);
 
 typedef struct {
   char*               name;
@@ -453,11 +455,13 @@ typedef enum {
 typedef struct MunitSuite_ MunitSuite;
 
 struct MunitSuite_ {
-  char*             prefix;
-  MunitTest*        tests;
-  MunitSuite*       suites;
-  unsigned int      iterations;
-  MunitSuiteOptions options;
+  char*               prefix;
+  MunitTest*          tests;
+  MunitSuiteSetup     setup;
+  MunitSuiteTearDown  tear_down;
+  MunitSuite*         suites;
+  unsigned int        iterations;
+  MunitSuiteOptions   options;
 };
 
 int munit_suite_main(const MunitSuite* suite, void* user_data, int argc, char* const argv[MUNIT_ARRAY_PARAM(argc + 1)]);
