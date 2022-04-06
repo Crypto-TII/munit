@@ -1049,6 +1049,7 @@ typedef struct {
   MunitParameter* parameters;
   munit_bool single_parameter_mode;
   void* user_data;
+  void* suite_setup_data;
   MunitReport report;
   munit_bool colorize;
   munit_bool fork;
@@ -1186,7 +1187,10 @@ munit_test_runner_exec(MunitTestRunner* runner, const MunitTest* test, const Mun
   munit_rand_seed(runner->seed);
 
   do {
-    void* data = (test->setup == NULL) ? runner->user_data : test->setup(params, runner->user_data);
+    void* data = (runner->suite_setup_data == NULL) ? runner->user_data : runner->suite_setup_data;
+    if (test->setup != NULL) {
+        data = test->setup(params, data);
+    }
 
 #if defined(MUNIT_ENABLE_TIMING)
     psnip_clock_get_time(PSNIP_CLOCK_TYPE_WALL, &wall_clock_begin);
@@ -1650,6 +1654,26 @@ munit_test_runner_run_test(MunitTestRunner* runner,
   munit_maybe_free_concat(test_name, prefix, test->name);
 }
 
+static void munit_test_runner_ruin_suite_setup(MunitTestRunner *runner,
+                                              const MunitSuite *suite,
+                                              int *setup_was_executed) {
+  if ((*setup_was_executed == 0) && (suite->setup != NULL)) {
+    munit_rand_seed(runner->seed);
+    runner->suite_setup_data = suite->setup(runner->user_data);
+    *setup_was_executed = 1;
+  }
+}
+
+static void munit_test_runner_ruin_suite_teardown(MunitTestRunner *runner,
+                                               const MunitSuite *suite,
+                                               int *setup_was_executed) {
+  if ((*setup_was_executed == 1) && (suite->tear_down != NULL)) {
+    suite->tear_down(runner->suite_setup_data);
+    *setup_was_executed = 0;
+  }
+  runner->suite_setup_data = NULL;
+}
+
 /* Recurse through the suite and run all the tests.  If a list of
  * tests to run was provied on the command line, run only those
  * tests.  */
@@ -1666,6 +1690,7 @@ munit_test_runner_run_suite(MunitTestRunner* runner,
   const char** test_name;
   const MunitSuite* child_suite;
   runner->current_suite = suite;
+  int suite_setup_was_executed = 0;
 
   /* Run the tests. */
   for (test = suite->tests ; test != NULL && test->test != NULL ; test++) {
@@ -1678,18 +1703,23 @@ munit_test_runner_run_suite(MunitTestRunner* runner,
         is_test_name_prefix = (pre_l == 0 || strncmp(pre, *test_name, pre_l) == 0) &&
                               strncmp(test->name, *test_name + pre_l, strlen(*test_name + pre_l)) == 0;
         if (is_suite_name_prefix || is_test_name_prefix) {
+          munit_test_runner_ruin_suite_setup(runner, suite, &suite_setup_was_executed);
           munit_test_runner_run_test(runner, test, pre);
-          if (runner->fatal_failures && (runner->report.failed != 0 || runner->report.errored != 0))
+          if (runner->fatal_failures && (runner->report.failed != 0 || runner->report.errored != 0)) {
             goto cleanup;
+          }
         }
       }
     } else { /* Run all tests */
+      munit_test_runner_ruin_suite_setup(runner, suite, &suite_setup_was_executed);
       munit_test_runner_run_test(runner, test, pre);
     }
   }
 
   if (runner->fatal_failures && (runner->report.failed != 0 || runner->report.errored != 0))
     goto cleanup;
+
+  munit_test_runner_ruin_suite_teardown(runner, suite, &suite_setup_was_executed);
 
   /* Run any child suites. */
   for (child_suite = suite->suites ; child_suite != NULL && child_suite->prefix != NULL ; child_suite++) {
@@ -1698,6 +1728,7 @@ munit_test_runner_run_suite(MunitTestRunner* runner,
 
  cleanup:
 
+  munit_test_runner_ruin_suite_teardown(runner, suite, &suite_setup_was_executed);
   munit_maybe_free_concat(pre, prefix, suite->prefix);
 }
 
@@ -1870,6 +1901,7 @@ munit_suite_main_custom(const MunitSuite* suite, void* user_data,
   runner.parameters = NULL;
   runner.single_parameter_mode = 0;
   runner.user_data = NULL;
+  runner.suite_setup_data = NULL;
 
   runner.report.successful = 0;
   runner.report.skipped = 0;

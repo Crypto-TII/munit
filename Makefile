@@ -10,6 +10,7 @@ EXTENSION:=
 TEST_ENV:=
 CFLAGS:=
 AGGRESSIVE_WARNINGS=n
+OUT_DIR:= build/
 
 ifeq ($(CC),pgcc)
         CFLAGS+=-c$(CSTD)
@@ -43,13 +44,23 @@ ifneq ($(CC),pgcc)
         endif
 endif
 
-example$(EXTENSION): munit.h munit.c example.c
-	$(CC) $(CFLAGS) -o $@ munit.c example.c
+${OUT_DIR}:
+	mkdir -p ${OUT_DIR}
 
-test:
-	$(TEST_ENV) ./example$(EXTENSION)
+example$(EXTENSION): munit.h munit.c tests/example.c
+	$(CC) $(CFLAGS) -I./ -o ${OUT_DIR}$@ munit.c tests/example.c
+
+
+test_nested_suites$(EXTENSION): munit.h munit.c tests/test_nested_suites.c
+	$(CC) $(CFLAGS) -I./ -DMUNIT_FAIL_NO_TEST_RUN -o ${OUT_DIR}$@ munit.c tests/test_nested_suites.c
+
+test: ${OUT_DIR} example$(EXTENSION) test_nested_suites$(EXTENSION)
+	$(TEST_ENV) ./${OUT_DIR}example$(EXTENSION)
+	$(TEST_ENV) ./${OUT_DIR}test_nested_suites$(EXTENSION)
 
 clean:
-	rm -f example$(EXTENSION)
+	rm -f ${OUT_DIR}example$(EXTENSION)
+	rm -f ${OUT_DIR}test_*$(EXTENSION)
+	rm -rf ${OUT_DIR}
 
-all: example$(EXTENSION)
+all: ${OUT_DIR} example$(EXTENSION) test_nested_suites$(EXTENSION)
